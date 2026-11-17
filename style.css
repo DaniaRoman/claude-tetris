@@ -133,6 +133,7 @@ kbd {
   color: #7aa2f7;
 }
 
+#resume-btn,
 #restart-btn {
   margin-top: 8px;
   background: #7aa2f7;
@@ -147,6 +148,23 @@ kbd {
   transition: background 0.15s;
 }
 
+#resume-btn:hover,
 #restart-btn:hover {
   background: #9bbdff;
+}
+
+#resume-btn.hidden {
+  display: none;
+}
+
+/* En pausa, Reanudar es la acción principal y Reiniciar pasa a secundario */
+#resume-btn:not(.hidden) + #restart-btn {
+  margin-top: 0;
+  background: transparent;
+  color: #7aa2f7;
+  border: 1px solid #3a3a5a;
+}
+
+#resume-btn:not(.hidden) + #restart-btn:hover {
+  background: #22223a;
 }
