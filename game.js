@@ -39,6 +39,7 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
+const resumeBtn = document.getElementById('resume-btn');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 
@@ -222,6 +223,7 @@ function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
+  resumeBtn.hidden = true;
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
 }
@@ -230,12 +232,15 @@ function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
+    overlay.classList.add('hidden');
+    resumeBtn.hidden = true;
     lastTime = performance.now();
     loop(lastTime);
   } else {
     cancelAnimationFrame(animId);
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
+    resumeBtn.hidden = false;
     overlay.classList.remove('hidden');
   }
 }
@@ -250,6 +255,7 @@ function loop(ts) {
       current.y++;
     } else {
       lockPiece();
+      if (gameOver) { draw(); return; }
     }
   }
   draw();
@@ -270,13 +276,21 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  resumeBtn.hidden = true;
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) {
+    e.preventDefault();
+  }
+  if (e.code === 'KeyP') {
+    if (!e.repeat) togglePause();
+    return;
+  }
   if (paused || gameOver) return;
+  if (e.repeat && (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyX')) return;
   switch (e.code) {
     case 'ArrowLeft':
       if (!collide(current.shape, current.x - 1, current.y)) current.x--;
@@ -299,6 +313,14 @@ document.addEventListener('keydown', e => {
   updateHUD();
 });
 
-restartBtn.addEventListener('click', init);
+resumeBtn.addEventListener('click', () => {
+  resumeBtn.blur();
+  if (paused) togglePause();
+});
+
+restartBtn.addEventListener('click', () => {
+  restartBtn.blur();
+  init();
+});
 
 init();
