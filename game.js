@@ -250,6 +250,7 @@ function loop(ts) {
       current.y++;
     } else {
       lockPiece();
+      if (gameOver) { draw(); return; }
     }
   }
   draw();
@@ -275,8 +276,15 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) {
+    e.preventDefault();
+  }
+  if (e.code === 'KeyP') {
+    if (!e.repeat) togglePause();
+    return;
+  }
   if (paused || gameOver) return;
+  if (e.repeat && (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyX')) return;
   switch (e.code) {
     case 'ArrowLeft':
       if (!collide(current.shape, current.x - 1, current.y)) current.x--;
@@ -299,6 +307,9 @@ document.addEventListener('keydown', e => {
   updateHUD();
 });
 
-restartBtn.addEventListener('click', init);
+restartBtn.addEventListener('click', () => {
+  restartBtn.blur();
+  init();
+});
 
 init();
