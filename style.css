@@ -5,9 +5,13 @@
 }
 
 body {
-  background: #0f0f17;
-  color: #e0e0e0;
-  font-family: system-ui, -apple-system, sans-serif;
+  background-color: #f7f4ee;
+  background-image:
+    radial-gradient(rgba(120, 130, 160, 0.06) 1px, transparent 1px),
+    linear-gradient(#fbf9f5, #f1ede5);
+  background-size: 6px 6px, 100% 100%;
+  color: #4a4f66;
+  font-family: 'Patrick Hand', 'Comic Sans MS', system-ui, sans-serif;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -27,10 +31,10 @@ body {
 
 #board {
   display: block;
-  border: 1px solid #2a2a3a;
-  background: #1a1a25;
-  border-radius: 4px;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.6);
+  box-sizing: content-box;
+  border: 14px solid #b9c6e4;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(70, 80, 120, 0.25), 0 1px 2px rgba(70, 80, 120, 0.3);
 }
 
 /* ---- Panel lateral ---- */
@@ -39,7 +43,10 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding-top: 4px;
+  padding: 16px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(70, 80, 120, 0.2);
+  transform: rotate(1deg);
 }
 
 .panel-section {
@@ -49,25 +56,22 @@ body {
 }
 
 .label {
-  font-size: 10px;
+  font-size: 14px;
   letter-spacing: 2px;
-  color: #555570;
-  font-weight: 600;
+  color: #8b93b5;
 }
 
 .value {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 26px;
-  font-weight: 700;
-  color: #7aa2f7;
+  font-size: 28px;
+  color: #4fa8f0;
   letter-spacing: 1px;
 }
 
 #next-canvas {
   display: block;
-  border: 1px solid #2a2a3a;
-  background: #1a1a25;
-  border-radius: 4px;
+  box-sizing: content-box;
+  border: 8px solid #b9c6e4;
+  background: #fff;
 }
 
 /* ---- Controles ---- */
@@ -79,21 +83,22 @@ body {
 }
 
 .controls li {
-  font-size: 12px;
-  color: #888;
+  font-size: 15px;
+  color: #6a708c;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
 kbd {
-  background: #22223a;
-  border: 1px solid #3a3a5a;
+  background: #fff;
+  border: 1.5px solid #b9c6e4;
   border-radius: 3px;
-  padding: 1px 6px;
-  font-size: 11px;
+  padding: 0 6px;
+  font-size: 13px;
   font-family: inherit;
-  color: #aaa;
+  color: #6a708c;
+  box-shadow: 0 1px 1px rgba(70, 80, 120, 0.25);
 }
 
 /* ---- Overlay ---- */
@@ -103,9 +108,8 @@ kbd {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(10, 10, 20, 0.75);
-  backdrop-filter: blur(4px);
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(3px);
 }
 
 .overlay.hidden {
@@ -121,28 +125,27 @@ kbd {
 }
 
 #overlay-title {
-  font-size: 28px;
-  font-weight: 800;
+  font-size: 34px;
   letter-spacing: 4px;
-  color: #e57373;
+  color: #ee6a98;
 }
 
 #overlay-score {
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 14px;
-  color: #7aa2f7;
+  font-size: 18px;
+  color: #4fa8f0;
 }
 
 #resume-btn,
 #restart-btn {
   margin-top: 8px;
-  background: #7aa2f7;
-  color: #0f0f17;
-  border: none;
-  border-radius: 6px;
-  padding: 10px 28px;
-  font-size: 14px;
-  font-weight: 700;
+  background: #ffc38a;
+  color: #4a4f66;
+  border: 1.5px solid #f0a35c;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(70, 80, 120, 0.25);
+  font-family: inherit;
+  padding: 8px 28px;
+  font-size: 18px;
   cursor: pointer;
   letter-spacing: 1px;
   transition: background 0.15s;
@@ -150,7 +153,7 @@ kbd {
 
 #resume-btn:hover,
 #restart-btn:hover {
-  background: #9bbdff;
+  background: #ffd3a8;
 }
 
 #resume-btn.hidden {
@@ -160,11 +163,11 @@ kbd {
 /* En pausa, Reanudar es la acción principal y Reiniciar pasa a secundario */
 #resume-btn:not(.hidden) + #restart-btn {
   margin-top: 0;
-  background: transparent;
-  color: #7aa2f7;
-  border: 1px solid #3a3a5a;
+  background: #fff;
+  color: #4fa8f0;
+  border: 1.5px solid #b9c6e4;
 }
 
 #resume-btn:not(.hidden) + #restart-btn:hover {
-  background: #22223a;
+  background: #eef2fb;
 }

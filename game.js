@@ -4,15 +4,26 @@ const COLS = 10;
 const ROWS = 20;
 const BLOCK = 30;
 
+// Estilo "recortes de papel": relleno pastel + borde más oscuro
 const COLORS = [
   null,
-  '#4dd0e1', // I - cyan
-  '#ffd54f', // O - yellow
-  '#ba68c8', // T - purple
-  '#81c784', // S - green
-  '#e57373', // Z - red
-  '#7986cb', // J - indigo
-  '#ffb74d', // L - orange
+  '#ffef7a', // I - amarillo
+  '#ff93b8', // O - rosa
+  '#ffc38a', // T - naranja
+  '#5ec9d6', // S - turquesa
+  '#4fa8f0', // Z - azul
+  '#9aa0f0', // J - lila
+  '#f3f58a', // L - amarillo lima
+];
+const BORDERS = [
+  null,
+  '#e2cf4a',
+  '#ee6a98',
+  '#f0a35c',
+  '#2fa8b8',
+  '#2b86d6',
+  '#7379d8',
+  '#9ccc65',
 ];
 
 const PIECES = [
@@ -41,16 +52,30 @@ const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const resumeBtn = document.getElementById('resume-btn');
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, faces, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
 }
 
+// Celda de la pieza (la más cercana al centro) donde se dibuja la carita
+function faceCell(shape) {
+  let sx = 0, sy = 0, n = 0;
+  shape.forEach((row, r) => row.forEach((v, c) => { if (v) { sx += c; sy += r; n++; } }));
+  sx /= n; sy /= n;
+  let best = null, bd = Infinity;
+  shape.forEach((row, r) => row.forEach((v, c) => {
+    if (!v) return;
+    const d = (c - sx) ** 2 + (r - sy) ** 2;
+    if (d < bd) { bd = d; best = { r, c }; }
+  }));
+  return best;
+}
+
 function randomPiece() {
   const type = Math.floor(Math.random() * 7) + 1;
   const shape = PIECES[type].map(row => [...row]);
-  return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
+  return { type, shape, rot: 0, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
 
 function collide(shape, ox, oy) {
@@ -81,6 +106,7 @@ function tryRotate() {
   for (const kick of kicks) {
     if (!collide(rotated, current.x + kick, current.y)) {
       current.shape = rotated;
+      current.rot = (current.rot + 1) % 4;
       current.x += kick;
       return;
     }
@@ -88,6 +114,8 @@ function tryRotate() {
 }
 
 function merge() {
+  const f = faceCell(current.shape);
+  faces[current.y + f.r][current.x + f.c] = current.rot;
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       if (current.shape[r][c])
@@ -100,6 +128,8 @@ function clearLines() {
     if (board[r].every(v => v !== 0)) {
       board.splice(r, 1);
       board.unshift(new Array(COLS).fill(0));
+      faces.splice(r, 1);
+      faces.unshift(new Array(COLS).fill(null));
       cleared++;
       r++;
     }
@@ -157,31 +187,71 @@ function updateHUD() {
   levelEl.textContent = level;
 }
 
-function drawBlock(context, x, y, colorIndex, size, alpha) {
+function drawFace(context, x, y, size, rot) {
+  context.save();
+  context.translate(x * size + size / 2, y * size + size / 2);
+  context.rotate(rot * Math.PI / 2);
+  context.fillStyle = '#3a3a48';
+  context.strokeStyle = '#3a3a48';
+  context.lineWidth = 1.6;
+  context.lineCap = 'round';
+  const e = size * 0.17;
+  context.beginPath();
+  context.arc(-e, -size * 0.04, size * 0.045, 0, Math.PI * 2);
+  context.arc(e, -size * 0.04, size * 0.045, 0, Math.PI * 2);
+  context.fill();
+  context.beginPath();
+  context.arc(0, size * 0.04, size * 0.09, 0.15 * Math.PI, 0.85 * Math.PI);
+  context.stroke();
+  context.restore();
+}
+
+function drawBlock(context, x, y, colorIndex, size, alpha, faceRot) {
   if (!colorIndex) return;
-  const color = COLORS[colorIndex];
-  context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = 'rgba(255,255,255,0.12)';
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  context.globalAlpha = 1;
+  const px = x * size, py = y * size;
+  context.save();
+  if (alpha) {
+    // fantasma: contorno punteado de la pieza
+    context.globalAlpha = alpha;
+    context.setLineDash([4, 3]);
+    context.strokeStyle = BORDERS[colorIndex];
+    context.lineWidth = 1.5;
+    context.strokeRect(px + 2, py + 2, size - 4, size - 4);
+    context.restore();
+    return;
+  }
+  // recorte de papel con sombra suave
+  context.shadowColor = 'rgba(60, 70, 110, 0.25)';
+  context.shadowBlur = 3;
+  context.shadowOffsetY = 1;
+  context.fillStyle = COLORS[colorIndex];
+  context.fillRect(px + 1, py + 1, size - 2, size - 2);
+  context.shadowColor = 'transparent';
+  context.strokeStyle = BORDERS[colorIndex];
+  context.lineWidth = 1.5;
+  context.strokeRect(px + 1.75, py + 1.75, size - 3.5, size - 3.5);
+  // textura de papel: línea de luz
+  context.fillStyle = 'rgba(255,255,255,0.25)';
+  context.fillRect(px + 3, py + 3, size - 6, 2);
+  context.restore();
+  if (faceRot != null) drawFace(context, x, y, size, faceRot);
 }
 
 function drawGrid() {
-  ctx.strokeStyle = '#22222e';
-  ctx.lineWidth = 0.5;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#c3cde6';
+  ctx.lineWidth = 1;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
-    ctx.moveTo(c * BLOCK, 0);
-    ctx.lineTo(c * BLOCK, ROWS * BLOCK);
+    ctx.moveTo(c * BLOCK + 0.5, 0);
+    ctx.lineTo(c * BLOCK + 0.5, ROWS * BLOCK);
     ctx.stroke();
   }
   for (let r = 1; r < ROWS; r++) {
     ctx.beginPath();
-    ctx.moveTo(0, r * BLOCK);
-    ctx.lineTo(COLS * BLOCK, r * BLOCK);
+    ctx.moveTo(0, r * BLOCK + 0.5);
+    ctx.lineTo(COLS * BLOCK, r * BLOCK + 0.5);
     ctx.stroke();
   }
 }
@@ -193,19 +263,21 @@ function draw() {
   // board
   for (let r = 0; r < ROWS; r++)
     for (let c = 0; c < COLS; c++)
-      drawBlock(ctx, c, r, board[r][c], BLOCK);
+      drawBlock(ctx, c, r, board[r][c], BLOCK, null, faces[r][c]);
 
   // ghost
   const gy = ghostY();
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       if (current.shape[r][c])
-        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.2);
+        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.5);
 
   // current piece
+  const f = faceCell(current.shape);
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
-      drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
+      drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK, null,
+        r === f.r && c === f.c ? current.rot : null);
 }
 
 function drawNext() {
@@ -214,9 +286,11 @@ function drawNext() {
   const shape = next.shape;
   const offX = Math.floor((4 - shape[0].length) / 2);
   const offY = Math.floor((4 - shape.length) / 2);
+  const f = faceCell(shape);
   for (let r = 0; r < shape.length; r++)
     for (let c = 0; c < shape[r].length; c++)
-      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB);
+      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB, null,
+        r === f.r && c === f.c ? 0 : null);
 }
 
 function endGame() {
@@ -263,6 +337,7 @@ function loop(ts) {
 
 function init() {
   board = createBoard();
+  faces = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
   score = 0;
   lines = 0;
   level = 1;
