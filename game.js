@@ -52,7 +52,7 @@ const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const resumeBtn = document.getElementById('resume-btn');
 
-let board, faces, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, pids, nextPid, faces, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
@@ -116,10 +116,13 @@ function tryRotate() {
 function merge() {
   const f = faceCell(current.shape);
   faces[current.y + f.r][current.x + f.c] = current.rot;
+  const id = nextPid++;
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
-      if (current.shape[r][c])
+      if (current.shape[r][c]) {
         board[current.y + r][current.x + c] = current.shape[r][c];
+        pids[current.y + r][current.x + c] = id;
+      }
 }
 
 function clearLines() {
@@ -130,6 +133,8 @@ function clearLines() {
       board.unshift(new Array(COLS).fill(0));
       faces.splice(r, 1);
       faces.unshift(new Array(COLS).fill(null));
+      pids.splice(r, 1);
+      pids.unshift(new Array(COLS).fill(0));
       cleared++;
       r++;
     }
@@ -206,35 +211,132 @@ function drawFace(context, x, y, size, rot) {
   context.restore();
 }
 
-function drawBlock(context, x, y, colorIndex, size, alpha, faceRot) {
-  if (!colorIndex) return;
-  const px = x * size, py = y * size;
-  context.save();
-  if (alpha) {
-    // fantasma: contorno punteado de la pieza
-    context.globalAlpha = alpha;
-    context.setLineDash([4, 3]);
-    context.strokeStyle = BORDERS[colorIndex];
-    context.lineWidth = 1.5;
-    context.strokeRect(px + 2, py + 2, size - 4, size - 4);
-    context.restore();
-    return;
+// Pseudo-aleatorio estable por celda, en el rango [-1, 1]
+function jitter(x, y, k) {
+  const s = Math.sin(x * 127.1 + y * 311.7 + k * 74.7) * 43758.5453;
+  return (s - Math.floor(s)) * 2 - 1;
+}
+
+// Textura de fibra de papel (se genera una sola vez)
+let paperPattern = null;
+function getPaperPattern(context) {
+  if (paperPattern) return paperPattern;
+  const t = document.createElement('canvas');
+  t.width = t.height = 96;
+  const g = t.getContext('2d');
+  g.lineCap = 'round';
+  for (let i = 0; i < 260; i++) {
+    const x = Math.random() * 96, y = Math.random() * 96;
+    const a = Math.random() * Math.PI, l = 2 + Math.random() * 6;
+    g.strokeStyle = Math.random() < 0.5
+      ? 'rgba(255,255,255,0.55)' : 'rgba(110,90,70,0.16)';
+    g.lineWidth = 0.5 + Math.random() * 0.6;
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l);
+    g.stroke();
   }
-  // recorte de papel con sombra suave
-  context.shadowColor = 'rgba(60, 70, 110, 0.25)';
-  context.shadowBlur = 3;
-  context.shadowOffsetY = 1;
-  context.fillStyle = COLORS[colorIndex];
-  context.fillRect(px + 1, py + 1, size - 2, size - 2);
-  context.shadowColor = 'transparent';
+  paperPattern = context.createPattern(t, 'repeat');
+  return paperPattern;
+}
+
+function ghostBlock(context, x, y, colorIndex, size) {
+  context.save();
+  context.globalAlpha = 0.5;
+  context.setLineDash([4, 3]);
   context.strokeStyle = BORDERS[colorIndex];
   context.lineWidth = 1.5;
-  context.strokeRect(px + 1.75, py + 1.75, size - 3.5, size - 3.5);
-  // textura de papel: línea de luz
-  context.fillStyle = 'rgba(255,255,255,0.25)';
-  context.fillRect(px + 3, py + 3, size - 6, 2);
+  context.beginPath();
+  context.roundRect(x * size + 2, y * size + 2, size - 4, size - 4, size * 0.22);
+  context.stroke();
   context.restore();
-  if (faceRot != null) drawFace(context, x, y, size, faceRot);
+}
+
+// Dibuja UNA pieza completa como un recorte de cartulina: silueta unida,
+// bordes exteriores redondeados, sombra propia, fibra de papel y
+// líneas de unión entre celdas. `cells` = [{x, y}] en unidades de celda.
+function drawPiece(context, cells, colorIndex, size, pid, lift, face) {
+  const set = new Set(cells.map(c => c.x + ',' + c.y));
+  const has = (x, y) => set.has(x + ',' + y);
+  const rad = size * 0.24, ins = 1.8;
+
+  const outline = new Path2D();
+  const inner = new Path2D();
+  for (const { x, y } of cells) {
+    const L = has(x - 1, y), R = has(x + 1, y), T = has(x, y - 1), B = has(x, y + 1);
+    const px = x * size, py = y * size;
+    // esquinas: tl, tr, br, bl; solo se redondea la que no toca otra celda
+    const radii = (k) => [
+      !(L || T) ? k : 0, !(R || T) ? k : 0, !(R || B) ? k : 0, !(L || B) ? k : 0,
+    ];
+    outline.roundRect(px, py, size, size, radii(rad));
+    const x0 = px + (L ? 0 : ins), x1 = px + size - (R ? 0 : ins);
+    const y0 = py + (T ? 0 : ins), y1 = py + size - (B ? 0 : ins);
+    inner.roundRect(x0, y0, x1 - x0, y1 - y0, radii(Math.max(0, rad - ins)));
+  }
+
+  // pequeño desfase y giro por pieza => hojas encimadas, no alineadas
+  let cx = 0, cy = 0;
+  cells.forEach(c => { cx += c.x + 0.5; cy += c.y + 0.5; });
+  cx = (cx / cells.length) * size; cy = (cy / cells.length) * size;
+  const jx = pid ? jitter(pid, 1, 1) : 0;
+  const jy = pid ? jitter(pid, 2, 2) : 0;
+  const jr = pid ? jitter(pid, 3, 3) : 0;
+
+  context.save();
+  context.translate(cx + jx * size * 0.05, cy + jy * size * 0.05);
+  context.rotate(jr * 0.025);
+  context.translate(-cx, -cy);
+
+  // 1) borde de papel + sombra de la pieza completa (una sola vez)
+  context.shadowColor = 'rgba(40, 50, 90, 0.38)';
+  context.shadowBlur = 5 * lift;
+  context.shadowOffsetX = 1.5 * lift;
+  context.shadowOffsetY = 3 * lift;
+  context.fillStyle = BORDERS[colorIndex];
+  context.fill(outline);
+  context.shadowColor = 'transparent';
+
+  // 2) cara de la cartulina
+  context.fillStyle = COLORS[colorIndex];
+  context.fill(inner);
+
+  context.save();
+  context.clip(inner);
+  // luz lateral suave
+  const minX = Math.min(...cells.map(c => c.x)) * size;
+  const maxX = (Math.max(...cells.map(c => c.x)) + 1) * size;
+  const grad = context.createLinearGradient(minX, 0, maxX, 0);
+  grad.addColorStop(0, 'rgba(255,255,255,0.22)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.07)');
+  context.fillStyle = grad;
+  context.fillRect(minX - size, 0, maxX - minX + 2 * size, 4000);
+  // fibra de papel
+  context.globalAlpha = 0.65;
+  context.fillStyle = getPaperPattern(context);
+  context.fillRect(minX - size, 0, maxX - minX + 2 * size, 4000);
+  context.globalAlpha = 1;
+  // costuras entre celdas de la misma pieza
+  context.strokeStyle = 'rgba(255,255,255,0.5)';
+  context.lineWidth = 1.2;
+  for (const { x, y } of cells) {
+    if (has(x + 1, y)) {
+      context.beginPath();
+      context.moveTo((x + 1) * size, y * size);
+      context.lineTo((x + 1) * size, (y + 1) * size);
+      context.stroke();
+    }
+    if (has(x, y + 1)) {
+      context.beginPath();
+      context.moveTo(x * size, (y + 1) * size);
+      context.lineTo((x + 1) * size, (y + 1) * size);
+      context.stroke();
+    }
+  }
+  context.restore();
+
+  if (face) drawFace(context, face.x, face.y, size, face.rot);
+  context.restore();
 }
 
 function drawGrid() {
@@ -260,24 +362,35 @@ function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawGrid();
 
-  // board
+  // tablero: una pieza (cartulina) por id, las más viejas debajo
+  const groups = new Map();
   for (let r = 0; r < ROWS; r++)
-    for (let c = 0; c < COLS; c++)
-      drawBlock(ctx, c, r, board[r][c], BLOCK, null, faces[r][c]);
+    for (let c = 0; c < COLS; c++) {
+      const id = pids[r][c];
+      if (!id) continue;
+      if (!groups.has(id)) groups.set(id, { type: board[r][c], cells: [], face: null });
+      const g = groups.get(id);
+      g.cells.push({ x: c, y: r });
+      if (faces[r][c] != null) g.face = { x: c, y: r, rot: faces[r][c] };
+    }
+  [...groups.entries()].sort((a, b) => a[0] - b[0])
+    .forEach(([id, g]) => drawPiece(ctx, g.cells, g.type, BLOCK, id, 1, g.face));
 
-  // ghost
+  // fantasma
   const gy = ghostY();
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       if (current.shape[r][c])
-        drawBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK, 0.5);
+        ghostBlock(ctx, current.x + c, gy + r, current.shape[r][c], BLOCK);
 
-  // current piece
+  // pieza actual: levantada, encima de todo
   const f = faceCell(current.shape);
+  const cells = [];
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
-      drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK, null,
-        r === f.r && c === f.c ? current.rot : null);
+      if (current.shape[r][c]) cells.push({ x: current.x + c, y: current.y + r });
+  drawPiece(ctx, cells, current.type, BLOCK, 0, 1.8,
+    { x: current.x + f.c, y: current.y + f.r, rot: current.rot });
 }
 
 function drawNext() {
@@ -287,10 +400,9 @@ function drawNext() {
   const offX = Math.floor((4 - shape[0].length) / 2);
   const offY = Math.floor((4 - shape.length) / 2);
   const f = faceCell(shape);
-  for (let r = 0; r < shape.length; r++)
-    for (let c = 0; c < shape[r].length; c++)
-      drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NB, null,
-        r === f.r && c === f.c ? 0 : null);
+  const cells = [];
+  shape.forEach((row, r) => row.forEach((v, c) => { if (v) cells.push({ x: offX + c, y: offY + r }); }));
+  drawPiece(nextCtx, cells, next.type, NB, 0, 1.4, { x: offX + f.c, y: offY + f.r, rot: 0 });
 }
 
 function endGame() {
@@ -338,6 +450,8 @@ function loop(ts) {
 function init() {
   board = createBoard();
   faces = Array.from({ length: ROWS }, () => new Array(COLS).fill(null));
+  pids = createBoard();
+  nextPid = 1;
   score = 0;
   lines = 0;
   level = 1;
