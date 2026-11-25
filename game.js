@@ -39,6 +39,7 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
+const resumeBtn = document.getElementById('resume-btn');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 
@@ -222,6 +223,7 @@ function endGame() {
   gameOver = true;
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
+  resumeBtn.classList.add('hidden');
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
 }
@@ -230,12 +232,15 @@ function togglePause() {
   if (gameOver) return;
   paused = !paused;
   if (!paused) {
+    overlay.classList.add('hidden');
+    resumeBtn.classList.add('hidden');
     lastTime = performance.now();
     loop(lastTime);
   } else {
     cancelAnimationFrame(animId);
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
+    resumeBtn.classList.remove('hidden');
     overlay.classList.remove('hidden');
   }
 }
@@ -270,6 +275,7 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  resumeBtn.classList.add('hidden');
   cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
@@ -299,6 +305,14 @@ document.addEventListener('keydown', e => {
   updateHUD();
 });
 
-restartBtn.addEventListener('click', init);
+resumeBtn.addEventListener('click', () => {
+  resumeBtn.blur();
+  if (paused) togglePause();
+});
+
+restartBtn.addEventListener('click', () => {
+  restartBtn.blur();
+  init();
+});
 
 init();
